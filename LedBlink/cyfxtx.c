@@ -36,11 +36,9 @@
 #define CY_U3P_MEM_HEAP_BASE         ((uint8_t *)0x40038000)
 #define CY_U3P_MEM_HEAP_SIZE         (0x8000)
 
-#ifdef CYU3P_FPGA
-#define CY_U3P_SYS_MEM_TOP           (0x40040000) /* Only 256 KB RAM available on FPGA. */
-#else /* Silicon */
-#define CY_U3P_SYS_MEM_TOP           (0x40078000) /* 512 KB RAM available on silicon. */
-#endif
+/* The last 32 KB of RAM is reserved for 2-stage boot operation. This value can be changed to
+   0x40080000 if 2-stage boot is not used by the application. */
+#define CY_U3P_SYS_MEM_TOP           (0x40078000)
 
 /*
    The buffer heap is used to obtain data buffers for DMA transfers in or out of
@@ -472,12 +470,13 @@ CyU3PDmaBufferAlloc (
 }
 
 /* This function shall be invoked from the DMA module for buffer de-allocation */
-void
+int
 CyU3PDmaBufferFree (
         void *buffer)
 {
     uint32_t status, start, count;
     uint32_t wordnum, bitnum;
+    int      retVal = -1;
 
     /* Get the lock for the buffer manager. */
     if (CyU3PThreadIdentify ())
@@ -491,7 +490,7 @@ CyU3PDmaBufferFree (
 
     if (status != CY_U3P_SUCCESS)
     {
-        return;
+        return retVal;
     }
 
     /* If the buffer address is within the range specified, count the number of consecutive ones and
@@ -521,10 +520,12 @@ CyU3PDmaBufferFree (
         /* Start the next buffer search at the top of the heap. This can help reduce fragmentation in cases where
            most of the heap is allocated and then freed as a whole. */
         glBufferManager.searchPos = 0;
+        retVal = 0;
     }
 
     /* Free the lock before we go. */
     CyU3PMutexPut (&glBufferManager.lock);
+    return retVal;
 }
 
 void
